@@ -77,6 +77,3 @@ def trigger_hotkey(keys: str):
             if key in key_map:
                 ui.write(e.EV_KEY, key_map[key], 0)
                 ui.syn()  # Synchronize the event
-
-# Example usage:
-#trigger_hotkey("e+c+h+o+space+a+b+c+d+e+f+g+h+i+j+k+l+m+n+o+p+q+r+s+t+u+v+w+x+y+z+enter")
