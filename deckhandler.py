@@ -4,14 +4,13 @@ import threading
 from PIL import Image, ImageDraw, ImageFont
 from StreamDeck.DeviceManager import DeviceManager
 from StreamDeck.ImageHelpers import PILHelper
-import actions.open_application
-import actions.open_website
-from actions.actions import *
-from actions.action import Action
+from actions import action
 import importlib
 import time
 import json
+import glob
 
+from key import Key
 
 
 # Folder location of image assets used by this example.
@@ -25,17 +24,28 @@ class DeckHandler:
         self.deck = deck
         self.config_path = config_path
         self.brightness = brightness
+
+        self.deck.close()
+        # This example only works with devices that have screens.
+        try:
+            self.deck.open()
+            self.deck.reset()
+        except Exception as e:
+            print("Error opening deck. {e}")
+            self.deck.close()
+            self.deck.open()
+    
     ## setters
-    def set_brightness(self):
-        self.brightness = brightness
-    def set_page(self):
-        self.page = page
-    def set_deck(self):
-        self.deck = deck
-    def set_config_path(self):
-        self.config_path = config_path
-    def set_profile(self):
-        self.profile = profile
+    def set_brightness(self, new_brightness):
+        self.brightness = new_brightness
+    def set_page(self, new_page):
+        self.page = new_page
+    def set_deck(self, new_deck):
+        self.deck = new_deck
+    def set_config_path(self, new_config_path):
+        self.config_path = new_config_path
+    def set_profile(self, new_profile):
+        self.profile = new_profile
     ##getters
     def get_brightness(self):
         return self.brightness
@@ -54,57 +64,14 @@ class DeckHandler:
             conf = json.load(f)
             return conf
 
-    def render_key_image(self, key):
-        conf_dict = self.load_config(self.config_path)
-        conf = conf_dict.get("pages").get(f"{self.page}").get("buttons").get(f"{key}")
-
-
-        icon_pressed = Image.open(os.path.join(ASSETS_PATH, f"pages/{self.page}/buttons/{key}/pressed.png"))
-        icon_released = Image.open(os.path.join(ASSETS_PATH, f"pages/{self.page}/buttons/{key}/released.png"))
-
-        background = conf.get("display").get("background")
-        font_filename = os.path.join(ASSETS_PATH, f"fonts/Roboto-Regular.ttf")
-        font = ImageFont.truetype(font_filename, 14)
-
-
-        pressed_image = PILHelper.create_scaled_key_image(self.deck, icon_pressed, margins=[0, 0, 20, 0], background=background)
-        released_image = PILHelper.create_scaled_key_image(self.deck, icon_released, margins=[0, 0, 20, 0], background=background)
-        # Load a custom TrueType font and use it to overlay the key index, draw key
-        # label onto the image a few pixels from the bottom of the key.
-        draw_pressed = ImageDraw.Draw(pressed_image)
-        draw_released = ImageDraw.Draw(released_image)
-        
-        draw_pressed.text((pressed_image.width / 2, pressed_image.height - 5), text=conf.get("name", "placeholder"), font=font, anchor="ms", fill="white")
-        draw_pressed.text((released_image.width / 2, released_image.height - 5), text=conf.get("name", "placeholder"), font=font, anchor="ms", fill="white")
-
-        return PILHelper.to_native_key_format(self.deck, pressed_image)
-
-
-    def update_key_image(self, key):
-        # Determine what icon and label to use on the generated key.
-        #key_style = get_key_style(deck,page, key, state)
-
-        # Generate the custom key with the requested image and label.
-        image = self.render_key_image(key)
-
-        # Use a scoped-with on the deck to ensure we're the only thread using it
-        # right now.
-        with self.deck:
-            # Update requested key with the generated image.
-            self.deck.set_key_image(key, image)  
-
     def render_full_page(self):
-        for key in range(self.deck.key_count()):
-            self.update_key_image(key)
+        for i in range(self.deck.key_count()):
+            img_path = os.path.join(ASSETS_PATH, f"pages/{self.page}/buttons/{i}")
+            k = Key(i, False, img_path, self, "label", "white")
+            k.update_key_image(False)
         
-
-    def key_change_callback(self, deck, key, state):
-        if key == 14 and state == True:
-
-            print("next page key TODO handle graciously")
             
-            self.page = f"{int(self.page) + 1}"
-            self.render_full_page()
+    def key_change_callback(self, deck, key, state):
         print("Deck {} Key {} = {}".format(deck.id(), key, state), flush=True)
         
         # Don't try to draw an image on a touch button
@@ -112,17 +79,9 @@ class DeckHandler:
             return
 
         # Update the key image based on the new key state.
-        self.update_key_image(key)
-
-        # Check if the key is changing to the pressed state.
+        #for i in range(self.deck.key_count()):
+        img_path = os.path.join(ASSETS_PATH, f"pages/{self.page}/buttons/{key}")
+        k = Key(key, state, img_path, self, "label", "red")
+        k.update_key_image(False)
         conf = self.load_config(self.config_path)
-        key_conf = conf.get("pages").get(f"{self.page}").get("buttons").get(f"{key}").get("actions").items()
-        print(f"{key_conf}")
-        for i in key_conf:  
-            act = Action(i[0], key, "deck", i[1])
-            if state == True:
-                act.perform_action()
-                # if state == True:
-                #     conf = self.load_config(self.config_path)
-                #     acts = list(conf.get("pages").get(f"{self.page}").get("buttons").get(f"{key}").get("actions").items())
-                #     perform_action(acts)     
+        k.action(conf, self.page)
