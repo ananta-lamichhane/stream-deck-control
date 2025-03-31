@@ -1,6 +1,7 @@
 import sys
 import alsaaudio
 import subprocess
+import keyboard
 
 
 
@@ -110,5 +111,19 @@ class ChangeDeckBrightnessAction(Action):
         ## send deck attribute that to be chaned and value
         self.deck.set_brightness(br)
         
+    def set_deck(self, deck):
+        self.deck = deck
+
+
+class TriggerHotkeyAction(Action):
+    def __init__(self, key, args):
+        super().__init__("trigger_hotkey", key, "deck", args)
+        self.deck = None
+
+    def perform_action(self):
+        args_str = self.args.split(",")
+        br = args_str[0]
+        ## send deck attribute that to be chaned and value
+        keyboard.press_and_release(br) 
     def set_deck(self, deck):
         self.deck = deck
